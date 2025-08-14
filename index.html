@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Calculadora de Huella de Carbono — Tipo WaterCalculator</title>
+  <!--
+    ──────────────────────────────────────────────────────────────────────────────
+    PROYECTO: Calculadora de Huella de Carbono (sin frameworks)
+    AUTOR: Tú :)
+
+    OBJETIVO
+    ========
+    Reproducir la experiencia tipo "Water Calculator" en una sola página HTML,
+    con pasos sencillos, inputs amigables y un cálculo transparente.
+
+    CÓMO USAR
+    =========
+    1) Guarda este archivo como index.html y ábrelo en tu navegador.
+    2) Todo el CSS y el JS están embebidos y documentados.
+    3) Puedes subir este archivo tal cual a Netlify/Vercel/GitHub Pages.
+
+    NOTAS
+    =====
+    - Todo está fuertemente comentado en español para que sepas qué hace cada cosa.
+    - Los factores son aproximados/educativos y están centralizados en un objeto
+      para que puedas editarlos fácilmente para México u otro país.
+    - La app guarda/recupera respuestas en localStorage para que el usuario pueda
+      continuar donde se quedó.
+  -->
+  <style>
+    /* ───────────────────────────────────────────────────────────────────────
+       ESTILOS BÁSICOS (sin frameworks) — accesibles y responsivos
+    */
+    :root{
+      --bg: #f3fbf7;
+      --card: #ffffff;
+      --text: #14312e;
+      --muted: #4b635e;
+      --brand: #0ea5a2; /* teal */
+      --brand-2: #22c55e; /* green */
+      --danger: #ef4444;
+    }
+    *{ box-sizing: border-box; }
+    html, body{ height: 100%; }
+    body{
+      margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: linear-gradient(180deg, #e6fffb, var(--bg)); color: var(--text);
+    }
+    .container{ max-width: 960px; margin: 0 auto; padding: 24px; }
+    header{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom: 16px; }
+    .logo{ display:flex; align-items:center; gap:12px; font-weight:700; font-size: clamp(18px, 2vw, 22px); }
+    .logo i{ font-style: normal; font-size: 28px; }
+    .card{ background: var(--card); border-radius: 18px; padding: 20px; box-shadow: 0 8px 20px rgba(0,0,0,0.05); }
+
+    /* Progreso superior */
+    .progress{ width:100%; height: 10px; background: #d4f6f4; border-radius: 999px; overflow: hidden; }
+    .progress > div{ height:100%; background: linear-gradient(90deg, var(--brand), var(--brand-2)); width: 0; transition: width .3s ease; }
+
+    /* Layout del paso */
+    .step{ display:grid; grid-template-columns: 1fr; gap:16px; }
+    .q-title{ font-size: clamp(18px, 2.2vw, 22px); margin: 0; }
+    .q-help{ color: var(--muted); font-size: 14px; margin: 0; }
+    .q-icon{ font-size: 40px; }
+
+    /* Controles accesibles */
+    .row{ display:flex; gap:10px; align-items:center; flex-wrap: wrap; }
+    input[type="number"], select {
+      width: 100%; max-width: 320px; padding: 12px 14px; border: 1.5px solid #cde9e6; border-radius: 12px; font-size: 16px;
+    }
+    input[type="range"]{ width: 100%; max-width: 420px; }
+    .chip{ padding:10px 14px; border-radius:999px; border:1.5px solid #cde9e6; cursor:pointer; user-select:none; }
+    .chip[aria-pressed="true"]{ background: #eafff6; border-color: #98e1c3; }
+
+    /* Footer de navegación */
+    .nav{ display:flex; justify-content: space-between; align-items:center; gap:10px; margin-top: 8px; }
+    .btn{ border:0; border-radius: 999px; padding: 12px 18px; font-weight:600; cursor:pointer; }
+    .btn-primary{ background: linear-gradient(90deg, var(--brand), var(--brand-2)); color:#fff; }
+    .btn-ghost{ background: transparent; color: var(--text); border: 1.5px solid #cde9e6; }
+    .btn:disabled{ opacity: .5; cursor: not-allowed; }
+
+    /* Resultados */
+    .results h2{ margin-top: 0; }
+    .breakdown{ display:grid; gap:10px; }
+    .bar{ height: 12px; background:#e8f6f5; border-radius: 999px; overflow:hidden; }
+    .bar > div{ height: 100%; background: linear-gradient(90deg, var(--brand), var(--brand-2)); }
+
+    /* Responsive */
+    @media (min-width: 720px){
+      .step{ grid-template-columns: 100px 1fr; align-items: start; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo" aria-label="Calculadora Huella de Carbono">
+        <i>🌿</i> Calculadora de Huella de Carbono
+      </div>
+      <button id="btnReset" class="btn btn-ghost" title="Borrar respuestas guardadas">Reiniciar</button>
+    </header>
+
+    <!-- Barra de progreso -->
+    <div class="card" aria-label="Progreso">
+      <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-live="polite">
+        <div id="progressFill" style="width:0%"></div>
+      </div>
+    </div>
+
+    <!-- Contenedor de pasos y resultados -->
+    <div id="app" class="card" style="margin-top:16px"></div>
+
+    <footer style="margin-top: 16px; color:var(--muted); font-size: 12px;">
+      <p>Prototipo educativo. Factores aproximados, ¡ajústalos a tus fuentes locales! Se guardan respuestas en tu navegador (localStorage).</p>
+    </footer>
+  </div>
+
+  <script>
+  // ───────────────────────────────────────────────────────────────────────────
+  // 1) FACTORES Y SUPUESTOS (EDITA AQUÍ)
+  // ----------------------------------------------------------------------------
+  // Todos los factores están en unidades "kg CO2e por unidad de actividad" o
+  // fórmulas simples.
+
+  const FACTOR_ELECTRICIDAD_MX = 0.30; // kg CO2e por kWh (ajustable)
+
+  const FACTORES = {
+    focos: {
+      // Potencias típicas por tipo de foco (kW = W/1000)
+      LED_kW: 0.009,         // 9 W por foco LED
+      INCANDESCENTE_kW: 0.06 // 60 W por foco incandescente
+    },
+    lavadora_kWh_por_ciclo: 0.7,         // kWh por carga (agua fría)
+    secadora_kWh_por_ciclo: 2.5,         // kWh por ciclo secadora
+    tv_kW: 0.05,                         // 50 W promedio por TV encendida
+    ac_kW_por_hora: 1.0,                 // minisplit ~1.0 kW por hora de uso
+    // Transporte
+    gasolina_kg_por_L: 2.31,             // kg CO2e por litro de gasolina
+    rendimiento_km_por_L: 13,            // km recorridos por litro (promedio)
+    bus_kg_por_pax_km: 0.105,            // autobús urbano por pasajero-km
+    // Vuelos
+    vuelo_corto_kg_por_km: 0.15,         // pkm con forzamiento radiativo
+    vuelo_largo_kg_por_km: 0.11,
+    // Hábitos
+    agua_b500_kg: 0.083,                 // 500 ml PET ≈ 83 g CO2e
+    alimentos: {
+      res_kg_por_kg: 60,
+      cerdo_kg_por_kg: 12,
+      pollo_kg_por_kg: 6,
+      legumbre_kg_por_kg: 2
+    },
+    // Conversión adicional
+    arbol_kg_por_anio: 21 // 1 árbol captura aprox. 21 kg CO2e/año (estimación)
+  };
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // 2) MODELO DE PREGUNTAS (UX SENCILLA)
+  // ----------------------------------------------------------------------------
+  // Cada paso indica: clave, ícono, título, ayuda y el tipo de control.
+  // Los valores se guardan en state.answers[clave].
+
+  const STEPS = [
+    // Bienvenida
+    { key: 'welcome', type: 'welcome', icon: '👋', title: '¡Bienvenido! ', help: 'Responde preguntas sencillas y obtén tu huella de carbono anual.' },
+
+    // HOGAR — Focos (cantidad, horas, tipo)
+    { key: 'focos_num', type: 'number', icon: '💡', title: '¿Cuántos focos hay en tu casa?', help: 'Incluye los más usados (sala, cocina, recámaras).', min:0, max:100, step:1 },
+    { key: 'focos_horas', type: 'range', icon: '⏱️', title: '¿Cuántas horas al día están encendidos?', help: 'Promedio diario de uso total.', min:0, max:12, step:1 },
+    { key: 'focos_tipo', type: 'chips', icon: '🧠', title: '¿Qué tipo de focos usas principalmente?', help: 'Si no sabes, deja LED (valor por defecto).', options: [ 'LED', 'Incandescente' ], default: 'LED' },
+
+    // HOGAR — Lavadora y Secadora (cargas por semana)
+    { key: 'lavadora_cargas', type: 'number', icon: '🧺', title: '¿Cuántas cargas de lavadora haces por semana?', help: 'Estimado semanal.', min:0, max:30, step:1 },
+    { key: 'secadora_cargas', type: 'number', icon: '🌬️', title: '¿Cuántas secadas haces por semana?', help: 'Deja 0 si no usas secadora.', min:0, max:30, step:1 },
+
+    // HOGAR — TV y Aire Acondicionado
+    { key: 'tv_horas', type: 'range', icon: '📺', title: '¿Cuántas horas al día está encendida la TV?', help: 'Promedio diario.', min:0, max:12, step:1 },
+    { key: 'ac_horas', type: 'range', icon: '❄️', title: '¿Cuántas horas al día usas A/A o calefacción?', help: 'Promedio durante la temporada de uso.', min:0, max:12, step:1 },
+    { key: 'ac_meses', type: 'range', icon: '📆', title: '¿Durante cuántos meses al año?', help: 'Si no usas, deja 0.', min:0, max:12, step:1 },
+
+    // TRANSPORTE — Auto, Bus y Vuelos
+    { key: 'auto_km_dia', type: 'select', icon: '🚗', title: '¿Cuántos km manejas por día?', help: 'Elige un rango aproximado.', options: ['0', '1–10', '11–30', '31–60', '60+'] },
+    { key: 'bus_km_sem', type: 'number', icon: '🚌', title: '¿Cuántos km viajas en autobús a la semana?', help: 'Deja 0 si no usas.', min:0, max:1000, step:1 },
+    { key: 'vuelo_km_anio', type: 'number', icon: '✈️', title: '¿Cuántos km vuelas al año?', help: 'Suma todos tus vuelos (IDA+VUELTA).', min:0, max:100000, step:100 },
+    { key: 'vuelo_tipo', type: 'chips', icon: '🛫', title: 'Tipo de vuelos más comunes', help: 'Ajusta el factor por distancia.', options: ['Corto', 'Largo'], default: 'Corto' },
+
+    // HÁBITOS — Agua embotellada y alimentos
+    { key: 'botellas_sem', type: 'number', icon: '🚰', title: '¿Cuántas botellas de 500 ml compras por semana?', help: 'PET individuales.', min:0, max:200, step:1 },
+    { key: 'res_porciones_sem', type: 'number', icon: '🥩', title: '¿Cuántas porciones de carne de res comes a la semana?', help: 'Una porción = 100 g.', min:0, max:30, step:1 },
+
+    // Resultados
+    { key: 'results', type: 'results', icon: '📊', title: 'Resultados', help: '' }
+  ];
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // 3) ESTADO (STATE) Y PERSISTENCIA
+  // ----------------------------------------------------------------------------
+  const STATE_KEY = 'co2quiz_state_v1';
+  const state = {
+    stepIndex: 0,
+    answers: loadState() || {}
+  };
+
+  function saveState(){
+    localStorage.setItem(STATE_KEY, JSON.stringify(state.answers));
+  }
+  function loadState(){
+    try{ return JSON.parse(localStorage.getItem(STATE_KEY)); }catch{ return null }
+  }
+  function resetAll(){
+    state.stepIndex = 0; state.answers = {}; saveState(); render(); updateProgress();
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // 4) CÁLCULO — Convierte respuestas en kg CO2e/año por categoría
+  // ----------------------------------------------------------------------------
+  function calcBreakdown(){
+    const A = state.answers;
+    const out = [];
+
+    // 4.1 FOCOS (kWh al año = focos × horas/día × potencia × 365)
+    const tipo = (A.focos_tipo || 'LED');
+    const pot_kW = tipo === 'Incandescente' ? FACTORES.focos.INCANDESCENTE_kW : FACTORES.focos.LED_kW;
+    const focos = toNum(A.focos_num);
+    const hFocos = toNum(A.focos_horas);
+    const kWh_focos_anio = focos * hFocos * pot_kW * 365;
+    const kg_focos = kWh_focos_anio * FACTOR_ELECTRICIDAD_MX;
+    if(kg_focos>0) out.push({ label:'Iluminación', kg: kg_focos });
+
+    // 4.2 LAVADORA (cargas/sem × 52 × kWh/ciclo)
+    const lav_sem = toNum(A.lavadora_cargas);
+    const kWh_lav = lav_sem * 52 * FACTORES.lavadora_kWh_por_ciclo;
+    const kg_lav = kWh_lav * FACTOR_ELECTRICIDAD_MX;
+    if(kg_lav>0) out.push({ label:'Lavadora', kg: kg_lav });
+
+    // 4.3 SECADORA (ciclos/sem × 52 × kWh/ciclo)
+    const sec_sem = toNum(A.secadora_cargas);
+    const kWh_sec = sec_sem * 52 * FACTORES.secadora_kWh_por_ciclo;
+    const kg_sec = kWh_sec * FACTOR_ELECTRICIDAD_MX;
+    if(kg_sec>0) out.push({ label:'Secadora', kg: kg_sec });
+
+    // 4.4 TV (horas/día × kW × 365)
+    const tv_h = toNum(A.tv_horas);
+    const kWh_tv = tv_h * FACTORES.tv_kW * 365;
+    const kg_tv = kWh_tv * FACTOR_ELECTRICIDAD_MX;
+    if(kg_tv>0) out.push({ label:'Televisión', kg: kg_tv });
+
+    // 4.5 AIRE ACONDICIONADO (horas/día × meses × 30 × kW)
+    const ac_h = toNum(A.ac_horas);
+    const ac_m = toNum(A.ac_meses);
+    const kWh_ac = ac_h * ac_m * 30 * FACTORES.ac_kW_por_hora;
+    const kg_ac = kWh_ac * FACTOR_ELECTRICIDAD_MX;
+    if(kg_ac>0) out.push({ label:'A/A o Calefacción', kg: kg_ac });
+
+    // 4.6 AUTO (km/día → L/día → kg CO2 → año)
+    const rango = A.auto_km_dia || '0';
+    const kmDia = rangoToKm(rango);
+    const L_por_dia = kmDia / FACTORES.rendimiento_km_por_L;
+    const kg_auto_dia = L_por_dia * FACTORES.gasolina_kg_por_L;
+    const kg_auto_anio = kg_auto_dia * 365;
+    if(kg_auto_anio>0) out.push({ label:'Auto particular', kg: kg_auto_anio });
+
+    // 4.7 BUS (km/sem × kg/pkm × 52)
+    const bus_km_sem = toNum(A.bus_km_sem);
+    const kg_bus = bus_km_sem * FACTORES.bus_kg_por_pax_km * 52;
+    if(kg_bus>0) out.push({ label:'Autobús', kg: kg_bus });
+
+    // 4.8 VUELOS (km/año × factor)
+    const km_vuelo = toNum(A.vuelo_km_anio);
+    const tipo_vuelo = (A.vuelo_tipo || 'Corto');
+    const f_vuelo = tipo_vuelo === 'Largo' ? FACTORES.vuelo_largo_kg_por_km : FACTORES.vuelo_corto_kg_por_km;
+    const kg_vuelo = km_vuelo * f_vuelo;
+    if(kg_vuelo>0) out.push({ label:'Vuelos', kg: kg_vuelo });
+
+    // 4.9 AGUA EMBOTELLADA (botellas/sem × 52 × 0.083 kg)
+    const bot_sem = toNum(A.botellas_sem);
+    const kg_bot = bot_sem * 52 * FACTORES.agua_b500_kg;
+    if(kg_bot>0) out.push({ label:'Agua embotellada', kg: kg_bot });
+
+    // 4.10 ALIMENTOS — Carne de res (porciones/sem × 0.1 kg × 60 kgCO2/kg × 52)
+    const por_res = toNum(A.res_porciones_sem);
+    const kg_res = por_res * 0.1 * FACTORES.alimentos.res_kg_por_kg * 52;
+    if(kg_res>0) out.push({ label:'Carne de res', kg: kg_res });
+
+    return out;
+  }
+
+  function rangoToKm(r){
+    switch(r){
+      case '1–10': return 6;     // punto medio aproximado
+      case '11–30': return 20;
+      case '31–60': return 45;
+      case '60+': return 70;     // conservador
+      default: return 0;
+    }
+  }
+
+  function toNum(v){ return Number(v||0) || 0; }
+
+  // Suma total y genera equivalencias simples
+  function calcTotals(){
+    const breakdown = calcBreakdown();
+    const totalKg = breakdown.reduce((s, x) => s + x.kg, 0);
+    const totalT = totalKg / 1000;
+    const arboles = Math.round(totalKg / FACTORES.arbol_kg_por_anio);
+    return { breakdown, totalKg, totalT, arboles };
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // 5) RENDER DE LA UI (sin frameworks)
+  // ----------------------------------------------------------------------------
+  const app = document.getElementById('app');
+  const progressFill = document.getElementById('progressFill');
+
+  function updateProgress(){
+    const idx = Math.min(state.stepIndex, STEPS.length-1);
+    const percent = Math.round((idx)/(STEPS.length-1) * 100);
+    progressFill.style.width = percent + '%';
+    const bar = document.querySelector('.progress');
+    bar?.setAttribute('aria-valuenow', String(percent));
+  }
+
+  function render(){
+    const step = STEPS[state.stepIndex];
+    if(!step) return;
+
+    // Plantilla básica del paso
+    let html = '';
+
+    if(step.type === 'welcome'){
+      html = `
+        <div class="step">
+          <div class="q-icon">${step.icon}</div>
+          <div>
+            <h2 class="q-title">${step.title}</h2>
+            <p class="q-help">${step.help}</p>
+            <div class="nav" style="margin-top:12px">
+              <button class="btn btn-primary" id="next">Comenzar</button>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    if(step.type === 'number' || step.type === 'range' || step.type === 'select' || step.type === 'chips'){
+      const val = state.answers[step.key] ?? '';
+      html = `
+        <div class="step">
+          <div class="q-icon">${step.icon}</div>
+          <div>
+            <h2 class="q-title">${step.title}</h2>
+            <p class="q-help">${step.help}</p>
+            <div class="row" style="margin:12px 0">
+              ${renderControl(step, val)}
+            </div>
+            ${renderNav()}
+          </div>
+        </div>`;
+    }
+
+    if(step.type === 'results'){
+      const { breakdown, totalKg, totalT, arboles } = calcTotals();
+      const max = Math.max(...breakdown.map(b=>b.kg), 1);
+
+      html = `
+        <div class="step">
+          <div class="q-icon">${step.icon}</div>
+          <div class="results">
+            <h2 class="q-title">Tu huella estimada</h2>
+            <p class="q-help">Resultados anuales basados en tus respuestas.</p>
+            <div class="card" style="margin:10px 0;">
+              <div><strong>Total:</strong> ${formatKg(totalKg)} kg CO₂e (<strong>${formatT(totalT)}</strong> t)</div>
+              <div><strong>Equivalencia:</strong> ≈ ${arboles} árboles plantados/año</div>
+            </div>
+            <h3>Desglose</h3>
+            <div class="breakdown">
+              ${breakdown.map(b=>`
+                <div>
+                  <div style="display:flex; justify-content:space-between; font-size:14px;">
+                    <span>${b.label}</span><span>${formatKg(b.kg)} kg</span>
+                  </div>
+                  <div class="bar"><div style="width:${(b.kg/max)*100}%"></div></div>
+                </div>
+              `).join('')}
+            </div>
+            <div class="nav" style="margin-top:14px">
+              <button class="btn btn-ghost" id="back">Atrás</button>
+              <button class="btn btn-primary" id="restart">Reiniciar</button>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    app.innerHTML = html;
+
+    // Eventos
+    const nextBtn = document.getElementById('next');
+    nextBtn?.addEventListener('click', ()=>{ state.stepIndex++; render(); updateProgress(); });
+
+    const backBtn = document.getElementById('back');
+    backBtn?.addEventListener('click', ()=>{ if(state.stepIndex>0){ state.stepIndex--; render(); updateProgress(); }});
+
+    const restartBtn = document.getElementById('restart');
+    restartBtn?.addEventListener('click', ()=>{ resetAll(); });
+
+    // Control específico del paso
+    wireControls(step);
+  }
+
+  function renderNav(){
+    return `
+      <div class="nav">
+        <button class="btn btn-ghost" id="back">Atrás</button>
+        <button class="btn btn-primary" id="next">Siguiente</button>
+      </div>`;
+  }
+
+  function renderControl(step, val){
+    if(step.type === 'number'){
+      return `<label>
+        <span class="sr-only">${step.title}</span>
+        <input id="ctrl" type="number" min="${step.min||0}" max="${step.max||9999}" step="${step.step||1}" value="${val}">
+      </label>`;
+    }
+    if(step.type === 'range'){
+      return `<div style="width:100%">
+        <input id="ctrl" type="range" min="${step.min}" max="${step.max}" step="${step.step}" value="${val||0}">
+        <div id="rangeVal" style="margin-top:6px; font-weight:600;">${val||0}</div>
+      </div>`;
+    }
+    if(step.type === 'select'){
+      return `<select id="ctrl">
+        ${(step.options||[]).map(opt=>`<option ${val===opt?'selected':''}>${opt}</option>`).join('')}
+      </select>`;
+    }
+    if(step.type === 'chips'){
+      const current = val || step.default || '';
+      return (step.options||[]).map(opt=>`<button class="chip" data-value="${opt}" aria-pressed="${current===opt}">${opt}</button>`).join('');
+    }
+    return '';
+  }
+
+  function wireControls(step){
+    const ctrl = document.getElementById('ctrl');
+    if(ctrl){
+      // Guardar cambios al mover el control
+      const commit = ()=>{
+        state.answers[step.key] = ctrl.value;
+        saveState();
+      };
+      ctrl.addEventListener('input', ()=>{
+        if(step.type==='range'){
+          document.getElementById('rangeVal').textContent = ctrl.value;
+        }
+      });
+      ctrl.addEventListener('change', commit);
+
+      // Navegación
+      document.getElementById('next').addEventListener('click', ()=>{
+        commit();
+        state.stepIndex = Math.min(state.stepIndex+1, STEPS.length-1);
+        render(); updateProgress();
+      });
+      document.getElementById('back').addEventListener('click', ()=>{
+        commit();
+        state.stepIndex = Math.max(state.stepIndex-1, 0);
+        render(); updateProgress();
+      });
+    } else {
+      // Chips (botones tipo pastilla)
+      const chips = Array.from(document.querySelectorAll('.chip'));
+      if(chips.length){
+        let selected = state.answers[step.key] || step.default || '';
+        chips.forEach(btn=>{
+          btn.addEventListener('click', ()=>{
+            selected = btn.dataset.value;
+            state.answers[step.key] = selected; saveState();
+            chips.forEach(c=>c.setAttribute('aria-pressed', String(c.dataset.value===selected)));
+          });
+        });
+        document.getElementById('next').addEventListener('click', ()=>{
+          if(!selected && step.options?.length){ alert('Selecciona una opción'); return; }
+          state.stepIndex = Math.min(state.stepIndex+1, STEPS.length-1);
+          render(); updateProgress();
+        });
+        document.getElementById('back').addEventListener('click', ()=>{
+          state.stepIndex = Math.max(state.stepIndex-1, 0);
+          render(); updateProgress();
+        });
+      } else {
+        // Navegación general (por si no hay control editable en el paso)
+        const nextBtn = document.getElementById('next');
+        nextBtn?.addEventListener('click', ()=>{ state.stepIndex++; render(); updateProgress(); });
+        const backBtn = document.getElementById('back');
+        backBtn?.addEventListener('click', ()=>{ state.stepIndex = Math.max(state.stepIndex-1, 0); render(); updateProgress(); });
+      }
+    }
+  }
+
+  // Formateadores
+  function formatKg(kg){ return kg.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  function formatT(t){ return t.toFixed(2); }
+
+  // Botón de reinicio total (limpia localStorage)
+  document.getElementById('btnReset').addEventListener('click', ()=>{
+    if(confirm('Esto borrará todas tus respuestas guardadas.')){
+      localStorage.removeItem(STATE_KEY); resetAll();
+    }
+  });
+
+  // Inicializa
+  render();
+  updateProgress();
+
+  </script>
+</body>
+</html>
